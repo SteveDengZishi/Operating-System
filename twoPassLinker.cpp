@@ -1,7 +1,4 @@
-//  2.cpp
-//  HackerRankQ
-//
-//  Created by Steve DengZishi on 5/30/17.
+//  Created by Steve DengZishi on 9/18/17.
 //  Copyright © 2017 Steve DengZishi. All rights reserved.
 //
 
@@ -16,7 +13,7 @@
 #include <cstring> // To use memset()
 #include <cstdlib> // To use atoi(), abs(), malloc()
 #include <algorithm> // To use sort(), next_permutation(), min(), max() etc.
-//#include <unordered_map> // To allow O(1) mapping access using key->value
+#include <unordered_map> // To allow O(1) mapping access using key->value
 #include <set> // To sort and remove duplicate when inserted
 #include <unordered_set> //To remove duplicates and count size
 #include <fstream> //To use c++ style read stream from file
@@ -62,13 +59,24 @@ void DEARRAY(T array[],int num=20){
 
 //functions, global variables, comparators & Non-STL Data Structures definition here
 fstream inFile;
-vector<pair<string,int>> symTable;
-vector<pair<string,int>> usageTable;
+//unordered_map to ensure O(1) access
+unordered_map<string, int> symTable;
 vector<int> baseTable;
+vector<pair<string,int>>* usageTable;
 vector<string> instructionTable;
 int moduleNum;
 int ND, NU, NT, addressDef, addressUse, absoluteAddress, baseAddress=0;
 string sym, instruction, line;
+
+string convertToThreeDigit(int num){
+    string string_i=to_string(num);
+    size_t i_bit=string_i.length();
+    
+    for(int l=0;l<(3-i_bit);l++){
+        string_i="0"+string_i;
+    }
+    return string_i;
+}
 
 //start of main()
 int main(int argc, const char * argv[]) {
@@ -84,65 +92,91 @@ int main(int argc, const char * argv[]) {
         cerr<<"Could not open the file."<<endl;
         exit(0);
     }
-    //read module Name
+    //read module Number
     inFile>>moduleNum;
+    //dynamic allocate usage table
+    usageTable=new vector<pair<string,int>>[moduleNum];
     
-    while(moduleNum--){
-        baseTable.push_back(baseAddress);
+    FOR(i,0,moduleNum){
         //reading definition list
         inFile>>ND;
         while(ND--){
             inFile>>sym>>addressDef;
             absoluteAddress=baseAddress+addressDef;
-            symTable.emplace_back(sym,absoluteAddress);
+            symTable[sym]=absoluteAddress;
         }
         //reading usage list
         inFile>>NU;
         while(NU--){
             inFile>>sym>>addressUse;
             absoluteAddress=baseAddress+addressUse;
-            usageTable.emplace_back(sym,absoluteAddress);
+            usageTable[i].emplace_back(sym,absoluteAddress);
         }
         //reading instruction list
         inFile>>NT;
+        //only push baseAddress once per module
+        baseTable.push_back(baseAddress);
         baseAddress+=NT; //increment base address
-        while(NT--){
-            inFile>>instruction;
-        }
-    }
-    //print Symbol Table and close file after first pass
-    cout<<"Symbol Table"<<endl;
-    FOR(i,0,symTable.size()){
-        cout<<symTable[i].first<<"="<<symTable[i].second<<endl;
-    }
-    inFile.close();
-    
-    //2nd pass reading, we already have base addresses, definition and usage in absolute addresses.
-    inFile.open(fileName,ios::in);
-    if(!inFile){
-        cerr<<"Could not open the file."<<endl;
-        exit(0);
-    }
-    
-    inFile>>moduleNum;
-    while(moduleNum--){
-        //reading definition list
-        getline(inFile,line);
-        
-        //reading usage list
-        getline(inFile,line);
-        
-        //reading instruction list
-        inFile>>NT;
         while(NT--){
             inFile>>instruction;
             instructionTable.push_back(instruction);
         }
     }
     
-    //error checking
-    //print the actual output with relocated and resolved addresses
+    //print Symbol Table and close file after first pass
+    cout<<"Symbol Table"<<endl;
+    unordered_map<string, int>::iterator itr;
+    for(itr=symTable.begin();itr!=symTable.end();itr++){
+        cout<<itr->first<<"="<<itr->second<<endl;
+    }
+    inFile.close();
     
-    
+    //    //2nd pass reading, we already have base addresses, definition and usage in absolute addresses.
+    //    inFile.open(fileName,ios::in);
+    //    if(!inFile){
+    //        cerr<<"Could not open the file."<<endl;
+    //        exit(0);
+    //    }
+    //
+    //    inFile>>moduleNum;
+    //    FOR(i,0,moduleNum){
+    //        //reading definition list
+    //        getline(inFile,line);
+    //
+    //        //reading usage list
+    //        getline(inFile,line);
+    //
+    //        //reading instruction list
+    //        getline(inFile,line);
+    //    }
+    //
+    //    FOR(i,0,moduleNum){
+    //        FOR(j,0,usageTable[i].size()){
+    //            sym=usageTable[i][j].first;
+    //            addressUse=usageTable[i][j].second;
+    //
+    //            while(instructionTable[addressUse].substr(1,3)!="777"){
+    //                instruction=instructionTable[addressUse];
+    //                int prevAddress=addressUse;
+    //                addressUse=stoi(instruction.substr(1,3))+baseTable[i];
+    //                //changing value entry in the table, the middle part need to convert to three digits
+    //                instructionTable[prevAddress]=instruction.substr(0,1)+convertToThreeDigit(usageTable[i][j].second)+instruction.substr(4,1);
+    //            }
+    //        }
+    //    }
+    //    //error checking
+    //    //print the actual output with relocated and resolved addresses
+    //    cout<<endl;
+    //    cout<<"Memory Map"<<endl;
+    //    string finalAddress;
+    //    FOR(i,0,instructionTable.size()){
+    //        //if address is relative, take the first 4 digits and add to base
+    //        if(instructionTable[i].substr(4)=="3") finalAddress=to_string(stoi(instructionTable[i].substr(0,4))+baseTable[i]);
+    //        else if(instructionTable[i].substr(4)=="4") finalAddress=instructionTable[i].substr(0,4);
+    //        else finalAddress=instructionTable[i].substr(0,4);
+    //        cout<<i<<":"<<"\t"<<finalAddress<<endl;
+    //    }
+    //    
     return 0;
 }
+
