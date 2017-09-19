@@ -1,3 +1,5 @@
+//
+//  Two-pass linker (Can be reduced to one pass)
 //  Created by Steve DengZishi on 9/18/17.
 //  Copyright © 2017 Steve DengZishi. All rights reserved.
 //
@@ -104,7 +106,8 @@ int main(int argc, const char * argv[]) {
         while(ND--){
             inFile>>sym>>addressDef;
             absoluteAddress=baseAddress+addressDef;
-            symTable[sym]=absoluteAddress;
+            if(symTable[sym]) cerr<<"Error symbol "<<sym<<" is multiply defined, the first value is used!"<<endl;
+            else symTable[sym]=absoluteAddress;
         }
         //reading usage list
         inFile>>NU;
@@ -158,7 +161,11 @@ int main(int argc, const char * argv[]) {
     FOR(i,0,moduleNum){
         FOR(j,0,usageTable[i].size()){
             sym=usageTable[i][j].first;
-            addressUse=usageTable[i][j].second;
+            if(!symTable[sym]) {
+                addressUse=0;
+                cerr<<"Symbol "<<sym<<" is used without definition, the value zero is used instead"<<endl;
+            }
+            else addressUse=usageTable[i][j].second;
             
             while(instructionTable[addressUse].substr(1,3)!="777"){
                 instruction=instructionTable[addressUse];
@@ -171,7 +178,6 @@ int main(int argc, const char * argv[]) {
             instructionTable[addressUse]=instruction.substr(0,1)+convertToThreeDigit(symTable[sym])+instruction.substr(4,1);
         }
     }
-    //error checking
     //print the actual output with relocated and resolved addresses
     cout<<endl;
     cout<<"Memory Map"<<endl;
@@ -183,7 +189,16 @@ int main(int argc, const char * argv[]) {
         else finalAddress=instructionTable[i].substr(0,4);
         cout<<i<<":"<<"\t"<<finalAddress<<endl;
     }
-    
+    //error checking
+    FOR(i,0,moduleNum){
+        FOR(j,0,usageTable[i].size()){
+            symTable[usageTable[i][j].first]=-1;
+        }
+    }
+    cout<<endl;
+    for(itr=symTable.begin();itr!=symTable.end();itr++){
+        if(itr->second!=-1) cerr<<"Warning: Variable "<<itr->first<<" is defined but not used!"<<endl;
+    }
     return 0;
 }
 

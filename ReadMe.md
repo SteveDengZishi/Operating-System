@@ -9,8 +9,8 @@
 1. Clone the repository and put input file to your root folder
 2. Compile in terminal using g++ -o twoPassLinker twoPassLinker.cpp -std=c++11
 3. ./twoPassLinker << EOF
-   > input-1
-   > EOF
+   input-1 (fileName)
+   EOF
 
 ## Features
 
