@@ -62,6 +62,7 @@ fstream inFile;
 //unordered_map to ensure O(1) access
 unordered_map<string, int> symTable;
 vector<int> baseTable;
+vector<int> baseMap;
 vector<pair<string,int>>* usageTable;
 vector<string> instructionTable;
 int moduleNum;
@@ -114,13 +115,15 @@ int main(int argc, const char * argv[]) {
         }
         //reading instruction list
         inFile>>NT;
-        //only push baseAddress once per module
+        //only push baseAddress once per module in baseTable
         baseTable.push_back(baseAddress);
-        baseAddress+=NT; //increment base address
-        while(NT--){
+        FOR(i,0,NT){
             inFile>>instruction;
             instructionTable.push_back(instruction);
+            //each instruction associate with one baseAddress in baseMap
+            baseMap.push_back(baseAddress);
         }
+        baseAddress+=NT; //increment base address
     }
     
     //print Symbol Table and close file after first pass
@@ -131,52 +134,56 @@ int main(int argc, const char * argv[]) {
     }
     inFile.close();
     
-    //    //2nd pass reading, we already have base addresses, definition and usage in absolute addresses.
-    //    inFile.open(fileName,ios::in);
-    //    if(!inFile){
-    //        cerr<<"Could not open the file."<<endl;
-    //        exit(0);
-    //    }
-    //
-    //    inFile>>moduleNum;
-    //    FOR(i,0,moduleNum){
-    //        //reading definition list
-    //        getline(inFile,line);
-    //
-    //        //reading usage list
-    //        getline(inFile,line);
-    //
-    //        //reading instruction list
-    //        getline(inFile,line);
-    //    }
-    //
-    //    FOR(i,0,moduleNum){
-    //        FOR(j,0,usageTable[i].size()){
-    //            sym=usageTable[i][j].first;
-    //            addressUse=usageTable[i][j].second;
-    //
-    //            while(instructionTable[addressUse].substr(1,3)!="777"){
-    //                instruction=instructionTable[addressUse];
-    //                int prevAddress=addressUse;
-    //                addressUse=stoi(instruction.substr(1,3))+baseTable[i];
-    //                //changing value entry in the table, the middle part need to convert to three digits
-    //                instructionTable[prevAddress]=instruction.substr(0,1)+convertToThreeDigit(usageTable[i][j].second)+instruction.substr(4,1);
-    //            }
-    //        }
-    //    }
-    //    //error checking
-    //    //print the actual output with relocated and resolved addresses
-    //    cout<<endl;
-    //    cout<<"Memory Map"<<endl;
-    //    string finalAddress;
-    //    FOR(i,0,instructionTable.size()){
-    //        //if address is relative, take the first 4 digits and add to base
-    //        if(instructionTable[i].substr(4)=="3") finalAddress=to_string(stoi(instructionTable[i].substr(0,4))+baseTable[i]);
-    //        else if(instructionTable[i].substr(4)=="4") finalAddress=instructionTable[i].substr(0,4);
-    //        else finalAddress=instructionTable[i].substr(0,4);
-    //        cout<<i<<":"<<"\t"<<finalAddress<<endl;
-    //    }
-    //    
+    //2nd pass reading, we already have base addresses, definition and usage in absolute addresses.
+    inFile.open(fileName,ios::in);
+    if(!inFile){
+        cerr<<"Could not open the file."<<endl;
+        exit(0);
+    }
+    
+    inFile>>moduleNum;
+    FOR(i,0,moduleNum){
+        //reading definition list
+        getline(inFile,line);
+        
+        //reading usage list
+        getline(inFile,line);
+        
+        //reading instruction list
+        getline(inFile,line);
+    }
+    
+    //    DEVEC(instructionTable);
+    
+    FOR(i,0,moduleNum){
+        FOR(j,0,usageTable[i].size()){
+            sym=usageTable[i][j].first;
+            addressUse=usageTable[i][j].second;
+            
+            while(instructionTable[addressUse].substr(1,3)!="777"){
+                instruction=instructionTable[addressUse];
+                int prevAddress=addressUse;
+                addressUse=stoi(instruction.substr(1,3))+baseTable[i];
+                //changing value entry in the table, the middle part need to convert to three digits
+                instructionTable[prevAddress]=instruction.substr(0,1)+convertToThreeDigit(symTable[sym])+instruction.substr(4,1);
+            }
+            instruction=instructionTable[addressUse];
+            instructionTable[addressUse]=instruction.substr(0,1)+convertToThreeDigit(symTable[sym])+instruction.substr(4,1);
+        }
+    }
+    //error checking
+    //print the actual output with relocated and resolved addresses
+    cout<<endl;
+    cout<<"Memory Map"<<endl;
+    string finalAddress;
+    FOR(i,0,instructionTable.size()){
+        //if address is relative, take the first 4 digits and add to base
+        if(instructionTable[i].substr(4)=="3") finalAddress=to_string(stoi(instructionTable[i].substr(0,4))+baseMap[i]);
+        else if(instructionTable[i].substr(4)=="4") finalAddress=instructionTable[i].substr(0,4);
+        else finalAddress=instructionTable[i].substr(0,4);
+        cout<<i<<":"<<"\t"<<finalAddress<<endl;
+    }
+    
     return 0;
 }
 
