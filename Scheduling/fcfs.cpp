@@ -65,10 +65,11 @@ void DEARRAY(T array[],int num=20){
 fstream infileProcess;
 fstream infileRandom;
 
+
 int randomOS(int U){
     int randint;
-    infileRandom.open("random-numbers.txt",ios::in);
     infileRandom>>randint;
+    //cout<<"Using random int: "<<randint<<endl;
     return 1+(randint%U);
 }
 
@@ -77,10 +78,20 @@ struct process{
     process(int first, int second, int third, int fourth):A(first),B(second),C(third),M(fourth){}
 };
 
+struct progress{
+    int remainT,ioT,arriveT;
+    progress(int arrive,int remain):arriveT(arrive),remainT(remain),ioT(0){}
+};
+
 struct result{
     int finishTime,turnTime,ioTime,waitTime;
+    result(){}
     result(int first, int second, int third, int fourth):finishTime(first),turnTime(second),ioTime(third),waitTime(fourth){}
 };
+
+bool compy(process a, process b){
+    return a.A<b.A;
+}
 
 //start of main()
 int main(int argc, const char * argv[]) {
@@ -90,6 +101,7 @@ int main(int argc, const char * argv[]) {
     
     //reading from the file
     string fileName = argv[1];
+    infileRandom.open("random-numbers.txt",ios::in);
     infileProcess.open(fileName,ios::in);
     int procNum,A,B,C,M;
     infileProcess>>procNum;
@@ -101,9 +113,6 @@ int main(int argc, const char * argv[]) {
         procVec.emplace_back(A,B,C,M);
     }
     
-    
-    
-    
     //output headers
     cout<<"The original input was: "<<procNum;
     FOR(i,0,procNum){
@@ -111,7 +120,7 @@ int main(int argc, const char * argv[]) {
     }
     cout<<endl;
     
-    sort(procVec.begin(),procVec.end());
+    stable_sort(procVec.begin(),procVec.end(),compy);
     
     cout<<"The (sorted) input is:  "<<procNum;
     FOR(i, 0, procNum){
@@ -121,7 +130,6 @@ int main(int argc, const char * argv[]) {
     cout<<endl;
     
     cout<<"The scheduling algorithm used was First Come First Served"<<endl;
-    cout<<endl;
     
     //calculations will be different based on different algorithms used
     int finish=0;
@@ -130,16 +138,128 @@ int main(int argc, const char * argv[]) {
     int waiting=0;
     float cpuUtil,ioUtil,throughPut,aveTurn,aveWait;
     
+    //queue contains all process in ready state, start counting waiting time
+    queue<int> inputProg;
+    queue<int> scheduler;
+    vector<progress> progVec;
+    
+    FOR(i,0,procNum) {
+        //initialize scheduler
+        inputProg.push((int)i);
+        //initialize progressRecorder with arrival times and total ramaining time
+        progVec.emplace_back(procVec[i].A,procVec[i].C);
+    }
+    
+    //set time Elapse to be the first arrival job
+    int timeElapse=procVec[inputProg.front()].A;
+    while(true){
+        //if no job is currently in scheduler, check whether need to input from inputProg or all jobs are done
+        if(scheduler.empty()){
+            if(inputProg.empty()) break;
+            else{
+                while(!inputProg.empty()){
+                    if(timeElapse>=procVec[inputProg.front()].A){
+                        scheduler.push(inputProg.front());
+                        inputProg.pop();
+                    }
+                    else break;
+                }
+            }
+        }
+        //pick the next job
+        int job=scheduler.front();
+        scheduler.pop();
+        //check whether next job is ready
+        if(timeElapse<progVec[job].arriveT){
+            timeElapse=progVec[job].arriveT;
+        }
+        
+        int cpuBurst=randomOS(procVec[job].B);
+        int ioBurst=cpuBurst*procVec[job].M;
+        //start burst and save state until block
+        if(progVec[job].remainT>cpuBurst){
+            //start cpu burst
+            timeElapse+=cpuBurst;
+            progVec[job].remainT-=cpuBurst;
+            //add ioT but timeElapse doesn't change
+            progVec[job].ioT+=ioBurst;
+            //before push back to wait, check whether new task arrives while cpuBursting
+            while(!inputProg.empty()){
+                if(procVec[inputProg.front()].A<timeElapse+ioBurst){
+                    //if process arrives before finishing cpu burst + io burst, push it to scheduler before the unfinished job
+                    scheduler.push(inputProg.front());
+                    inputProg.pop();
+                }
+                else break;
+            }
+            //push back to wait
+            scheduler.push(job);
+            //update arrival time in progress
+            progVec[job].arriveT=timeElapse+ioBurst;
+        }
+        else{
+            timeElapse+=progVec[job].remainT;
+            progVec[job].remainT=0;
+            //check whether new task arrives while cpuBursting
+            while(!inputProg.empty()){
+                if(procVec[inputProg.front()].A<timeElapse){
+                    //if process arrives before finishing cpu burst, push it to scheduler
+                    scheduler.push(inputProg.front());
+                    inputProg.pop();
+                }
+                else break;
+            }
+            //finished process and update result
+            /*
+             usedT=cpuBurstT+ioT+waitT
+             finishT=arriveT+usedT
+             turnT=finishT-arriveT
+             remainT=process.C-cpuBurstT
+             timeElapse-arrivalT=turnaroundT
+             turnaroundT-ioT-C=waitT
+             */
+            finish=timeElapse;
+            //use the initial arrival time in procVec
+            turnAround=finish-procVec[job].A;
+            io=progVec[job].ioT;
+            waiting=turnAround-io-procVec[job].C;
+            result done(finish,turnAround,io,waiting);
+            procResult[job]=done;
+        }
+    }
+    
     //output all process indentifications
     FOR(i,0,procNum){
-        printf("Process %d:",(int)i);
-        printf("\t(A,B,C,M) = (%d,%d,%d,%d)",procVec[i].A,procVec[i].B,procVec[i].C,procVec[i].M);
-        printf("\tFinishing time: %d",procResult[(int)i].finishTime);
-        printf("\tTurnaround time: %d",procResult[(int)i].turnTime);
-        printf("\tI/O time: %d",procResult[(int)i].ioTime);
-        printf("\tWaiting time: %d",procResult[(int)i].waitTime);
+        printf("\nProcess %d:\n",(int)i);
+        printf("\t(A,B,C,M) = (%d,%d,%d,%d)\n",procVec[i].A,procVec[i].B,procVec[i].C,procVec[i].M);
+        printf("\tFinishing time: %d\n",procResult[(int)i].finishTime);
+        printf("\tTurnaround time: %d\n",procResult[(int)i].turnTime);
+        printf("\tI/O time: %d\n",procResult[(int)i].ioTime);
+        printf("\tWaiting time: %d\n",procResult[(int)i].waitTime);
     }
     //output summary data
+    int totalCPU=0;
+    int totalIO=0;
+    int totalTurn=0;
+    int totalWait=0;
+    FOR(i,0,procNum){
+        totalCPU+=procVec[i].C;
+        totalIO+=progVec[i].ioT;
+        totalTurn+=procResult[i].turnTime;
+        totalWait+=procResult[i].waitTime;
+    }
+    cpuUtil=(float)totalCPU/(float)finish;
+    ioUtil=(float)totalIO/(float)finish;
+    throughPut=100.0/(float)finish*(float)procNum;
+    aveTurn=(float)totalTurn/(float)procNum;
+    aveWait=(float)totalWait/(float)procNum;
     
+    printf("\nSummary Data: \n");
+    printf("\tFinishing Time: %d\n",finish);
+    printf("\tCPU utilization: %f\n",cpuUtil);
+    printf("\tI/O utilization: %f\n",ioUtil);
+    printf("\tThroughPut: %f processes per hundred cycles\n",throughPut);
+    printf("\tAverage turnaround time: %f\n",aveTurn);
+    printf("\tAverage waiting time: %f\n",aveWait);
     return 0;
 }
