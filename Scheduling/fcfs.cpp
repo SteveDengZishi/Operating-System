@@ -64,7 +64,9 @@ void DEARRAY(T array[],int num=20){
 //functions, global variables, comparators & Non-STL Data Structures definition here
 fstream infileProcess;
 fstream infileRandom;
-
+string fileName;
+string flag;
+int* status;//-1 is unstarted, 1 is ready, 2 is running, 3 is blocked, 4 is terminated
 
 int randomOS(int U){
     int randint;
@@ -93,6 +95,10 @@ bool compy(process a, process b){
     return a.A<b.A;
 }
 
+bool compShortest(pair<int,progress> a, pair<int,progress> b){
+    return a.second.remainT<b.second.remainT;
+}
+
 //start of main()
 int main(int argc, const char * argv[]) {
     //optimize iostream
@@ -100,7 +106,18 @@ int main(int argc, const char * argv[]) {
     cin.tie(NULL);
     
     //reading from the file
-    string fileName = argv[1];
+    if(argc==2){
+        fileName=argv[1];
+    }
+    else if(argc==3){
+        flag=argv[1];
+        fileName=argv[2];
+    }
+    else{
+        cerr<<"illegal input, you should provide one or two command line arguments"<<endl;
+        exit(0);
+    }
+    
     infileRandom.open("random-numbers.txt",ios::in);
     infileProcess.open(fileName,ios::in);
     int procNum,A,B,C,M;
