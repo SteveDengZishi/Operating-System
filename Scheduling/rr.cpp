@@ -6,7 +6,6 @@
 //  Copyright © 2017 Steve DengZishi. All rights reserved.
 //
 
-
 #include <iostream>
 #include <cstdio>
 #include <vector>
@@ -67,12 +66,16 @@ fstream infileProcess;
 fstream infileRandom;
 string fileName;
 string flag;
-int* status;//-1 is unstarted, 1 is ready, 2 is running, 3 is blocked, 4 is terminated
+int cpuStatus;
+int cycle;
+int procNum;
+string table[5];
+int quantum=2;
 
 int randomOS(int U){
     int randint;
     infileRandom>>randint;
-    //cout<<"Using random int: "<<randint<<endl;
+    if(flag=="--verbose") cout<<"Find burst when choosing ready process to run: "<<randint<<endl;
     return 1+(randint%U);
 }
 
@@ -82,8 +85,11 @@ struct process{
 };
 
 struct progress{
-    int remainT,ioT,arriveT;
-    progress(int arrive,int remain):arriveT(arrive),remainT(remain),ioT(0){}
+    int status; //0 is unstarted, 1 is ready, 2 is running, 3 is blocked, 4 is terminated
+    int ioStatus; //-1 is uninitialized, 0 is unstarted, 1 is started
+    int queueStatus; //0 is not in the queue, 1 is in the queue
+    int remainT,ioT,arriveT,remainingBurst,remainingIO,waitT;
+    progress(int arrive,int remain):arriveT(arrive),remainT(remain),ioT(0),status(0),remainingBurst(0),remainingIO(0),waitT(0),ioStatus(-1),queueStatus(0){}
 };
 
 struct result{
@@ -91,6 +97,13 @@ struct result{
     result(){}
     result(int first, int second, int third, int fourth):finishTime(first),turnTime(second),ioTime(third),waitTime(fourth){}
 };
+
+vector<process> procVec;
+unordered_map<int, result> procResult;
+//queue contains all process in ready state, start counting waiting time
+queue<int> inputProg;
+queue<int> scheduler;
+vector<progress> progVec;
 
 bool compy(process a, process b){
     return a.A<b.A;
@@ -100,13 +113,33 @@ bool compShortest(pair<int,progress> a, pair<int,progress> b){
     return a.second.remainT<b.second.remainT;
 }
 
+void printStatus(int cycle){
+    printf("Before cycle    %d:",cycle);
+    FOR(i,0,procNum){
+        cout<<" "<<table[progVec[i].status];
+        if(progVec[i].status==3){
+            cout<<" "<<progVec[i].remainingIO;
+        }
+        else if(progVec[i].status==1){
+            cout<<" "<<0;
+        }
+        else if(progVec[i].status==0){
+            cout<<" "<<0;
+        }
+        else if(progVec[i].status==4){
+            cout<<" "<<0;
+        }
+        else{
+            cout<<" "<<quantum;
+        }
+    }
+    cout<<endl;
+}
+
 //start of main()
 int main(int argc, const char * argv[]) {
-    //optimize iostream
-    ios_base::sync_with_stdio(false);
-    cin.tie(NULL);
     
-    //reading from the file
+    //reading ternimal argument
     if(argc==2){
         fileName=argv[1];
     }
@@ -119,12 +152,12 @@ int main(int argc, const char * argv[]) {
         exit(0);
     }
     
+    
+    //parsing input
     infileRandom.open("random-numbers.txt",ios::in);
     infileProcess.open(fileName,ios::in);
-    int procNum,A,B,C,M;
+    int A,B,C,M;
     infileProcess>>procNum;
-    vector<process> procVec;
-    unordered_map<int, result> procResult;
     
     FOR(i,0,procNum){
         infileProcess>>A>>B>>C>>M;
@@ -138,6 +171,7 @@ int main(int argc, const char * argv[]) {
     }
     cout<<endl;
     
+    //procVect is currently sorted
     stable_sort(procVec.begin(),procVec.end(),compy);
     
     cout<<"The (sorted) input is:  "<<procNum;
@@ -149,17 +183,18 @@ int main(int argc, const char * argv[]) {
     
     cout<<"The scheduling algorithm used was Round-Robin with quantum 2"<<endl;
     
-    //calculations will be different based on different algorithms used
-    int finish=0;
-    int turnAround=0;
-    int io=0;
-    int waiting=0;
+    //initialize variables
+    cycle=0;
+    cpuStatus=-1; //-1 means no process is running otherwise will be index of process
     float cpuUtil,ioUtil,throughPut,aveTurn,aveWait;
     
-    //queue contains all process in ready state, start counting waiting time
-    queue<int> inputProg;
-    queue<int> scheduler;
-    vector<progress> progVec;
+    //initialize procTable to be all unstarted
+    //0 is unstarted, 1 is ready, 2 is running, 3 is blocked, 4 is terminated
+    table[0]="unstarted";
+    table[1]="ready";
+    table[2]="running";
+    table[3]="blocked";
+    table[4]="terminated";
     
     FOR(i,0,procNum) {
         //initialize scheduler
@@ -168,82 +203,148 @@ int main(int argc, const char * argv[]) {
         progVec.emplace_back(procVec[i].A,procVec[i].C);
     }
     
-    //set time Elapse to be the first arrival job
-    int timeElapse=procVec[inputProg.front()].A;
+    //printing cycle 0, all unstarted
+    if(flag=="--verbose") printStatus(cycle);
+    
+    //cycle loop
+    int blocked=0;
     while(true){
-        //if no job is currently in scheduler, check whether need to input from inputProg or all jobs are done
-        if(scheduler.empty()){
-            if(inputProg.empty()) break;
-            else{
-                while(!inputProg.empty()){
-                    if(timeElapse>=procVec[inputProg.front()].A){
-                        scheduler.push(inputProg.front());
-                        inputProg.pop();
-                    }
-                    else break;
+        
+        //check whether blocking progress is ready
+        FOR(i,0,procNum){
+            if(progVec[i].status==3){
+                if(progVec[i].remainingIO==0){
+                    //change status to ready
+                    progVec[i].status=1;
+                    scheduler.push((int)i);
+                    progVec[i].queueStatus=1;
                 }
             }
-        }
-        //pick the next job
-        int job=scheduler.front();
-        scheduler.pop();
-        //check whether next job is ready
-        if(timeElapse<progVec[job].arriveT){
-            timeElapse=progVec[job].arriveT;
         }
         
-        int cpuBurst=randomOS(procVec[job].B);
-        int ioBurst=cpuBurst*procVec[job].M;
-        //start burst and save state until block
-        if(progVec[job].remainT>cpuBurst){
-            //start cpu burst
-            timeElapse+=cpuBurst;
-            progVec[job].remainT-=cpuBurst;
-            //add ioT but timeElapse doesn't change
-            progVec[job].ioT+=ioBurst;
-            //before push back to wait, check whether new task arrives while cpuBursting
-            while(!inputProg.empty()){
-                if(procVec[inputProg.front()].A<timeElapse+ioBurst){
-                    //if process arrives before finishing cpu burst + io burst, push it to scheduler before the unfinished job
-                    scheduler.push(inputProg.front());
-                    inputProg.pop();
-                }
-                else break;
+        
+        //if it is ready but ioBurst have not started, means it was pre-empted
+        FOR(i,0,procNum){
+            if(progVec[i].status==1 && progVec[i].ioStatus==0 && progVec[i].queueStatus==0){
+                scheduler.push((int)i);
+                progVec[i].queueStatus=1;
             }
-            //push back to wait
-            scheduler.push(job);
-            //update arrival time in progress
-            progVec[job].arriveT=timeElapse+ioBurst;
         }
-        else{
-            timeElapse+=progVec[job].remainT;
-            progVec[job].remainT=0;
-            //check whether new task arrives while cpuBursting
-            while(!inputProg.empty()){
-                if(procVec[inputProg.front()].A<timeElapse){
-                    //if process arrives before finishing cpu burst, push it to scheduler
-                    scheduler.push(inputProg.front());
-                    inputProg.pop();
-                }
-                else break;
+        
+        //count how many process were in blocked status
+        int blockingCnt=0;
+        FOR(i,0,procNum){
+            if(progVec[i].status==3){
+                blockingCnt++;
             }
-            //finished process and update result
-            /*
-             usedT=cpuBurstT+ioT+waitT
-             finishT=arriveT+usedT
-             turnT=finishT-arriveT
-             remainT=process.C-cpuBurstT
-             timeElapse-arrivalT=turnaroundT
-             turnaroundT-ioT-C=waitT
-             */
-            finish=timeElapse;
-            //use the initial arrival time in procVec
-            turnAround=finish-procVec[job].A;
-            io=progVec[job].ioT;
-            waiting=turnAround-io-procVec[job].C;
-            result done(finish,turnAround,io,waiting);
-            procResult[job]=done;
         }
+        
+        if(blockingCnt>0) blocked++;
+        
+        //breaking condition: if no coming input && no process in ready status && no blocked process
+        if(inputProg.size()==0 && scheduler.size()==0 && blockingCnt==0 && cpuStatus==-1) break;
+        
+        //check whether new task is coming in
+        while(progVec[inputProg.front()].arriveT==cycle && inputProg.size()!=0){
+            //if yes, push to scheduler and change status to ready
+            progVec[inputProg.front()].status=1;
+            scheduler.push(inputProg.front());
+            inputProg.pop();
+        }
+        
+        //pick jobs to execute
+        //if current cpuStatus is running, continue the execution
+        //else pick a new job
+        if(cpuStatus==-1){
+            if(!scheduler.empty()) {
+                cpuStatus=scheduler.front();
+                scheduler.pop();
+                progVec[cpuStatus].queueStatus=0;
+                //random number is generated with new job if it is finished last burst
+                if(progVec[cpuStatus].remainingBurst==0){
+                    int cpuBurst=randomOS(procVec[cpuStatus].B);
+                    int ioBurst=cpuBurst*procVec[cpuStatus].M;
+                    progVec[cpuStatus].remainingBurst=cpuBurst;
+                    progVec[cpuStatus].remainingIO=ioBurst;
+                    progVec[cpuStatus].ioStatus=0;
+                }
+                //reset quantum
+                quantum=2;
+                //initialize current burst and remaining time
+                //selected process start running status
+                progVec[cpuStatus].status=2;
+                
+            }
+        }
+        
+        //increment cycles
+        cycle++;
+        
+        //printing status before round starts
+        if(flag=="--verbose") printStatus(cycle);
+        
+        //run down ioBurst & increase IOT for all other process and add wait time is they are ready
+        FOR(i,0,procNum){
+            if(progVec[i].status==3){
+                if(progVec[i].remainingIO>1){
+                    progVec[i].ioT++;
+                    progVec[i].remainingIO--;
+                }
+                else{
+                    progVec[i].ioT++;
+                    progVec[i].remainingIO=0;
+                }
+            }
+        }
+        
+        FOR(i,0,procNum){
+            //if the status is ready but not running
+            if(progVec[i].status==1){
+                progVec[i].waitT++;
+            }
+        }
+        
+        //starting cpuBurst
+        if(cpuStatus!=-1){// to make sure cpu is not in idle state
+            //run down burstRemain, run down ioRemain and increment ready wait time
+            //if there is 1 and more time to run
+            if(progVec[cpuStatus].remainingBurst>1 && progVec[cpuStatus].remainT>1 && quantum>1){
+                progVec[cpuStatus].remainingBurst--;
+                progVec[cpuStatus].remainT--;
+                quantum--;
+            }
+            //process terminates
+            else if(progVec[cpuStatus].remainT==1){
+                progVec[cpuStatus].remainingBurst=0;
+                progVec[cpuStatus].remainT=0;
+                progVec[cpuStatus].status=4;
+                quantum=0;
+                //record to procResult
+                procResult[cpuStatus]=result(cycle,cycle-progVec[cpuStatus].arriveT,progVec[cpuStatus].ioT,progVec[cpuStatus].waitT);
+                cpuStatus=-1;
+            }
+            //else change to status to blocked and start ioBurst
+            else if(progVec[cpuStatus].remainingBurst==1){
+                progVec[cpuStatus].ioStatus=1;
+                progVec[cpuStatus].remainingBurst=0;
+                progVec[cpuStatus].remainT--;
+                progVec[cpuStatus].status=3;
+                cpuStatus=-1;
+                quantum=0;
+            }
+            //else quantum run out, pre-empt the process
+            else if(quantum==1){
+                progVec[cpuStatus].remainingBurst--;
+                progVec[cpuStatus].remainT--;
+                //change status to ready but do not need to start ioBurst
+                progVec[cpuStatus].status=1;
+                //put to scheduler after some ioBurst ready
+                //scheduler.push(cpuStatus);
+                cpuStatus=-1;
+                quantum=0;
+            }
+        }
+        
     }
     
     //output all process indentifications
@@ -257,23 +358,21 @@ int main(int argc, const char * argv[]) {
     }
     //output summary data
     int totalCPU=0;
-    int totalIO=0;
     int totalTurn=0;
     int totalWait=0;
     FOR(i,0,procNum){
         totalCPU+=procVec[i].C;
-        totalIO+=progVec[i].ioT;
-        totalTurn+=procResult[i].turnTime;
-        totalWait+=procResult[i].waitTime;
+        totalTurn+=procResult[(int)i].turnTime;
+        totalWait+=procResult[(int)i].waitTime;
     }
-    cpuUtil=(float)totalCPU/(float)finish;
-    ioUtil=(float)totalIO/(float)finish;
-    throughPut=100.0/(float)finish*(float)procNum;
+    cpuUtil=(float)totalCPU/(float)cycle;
+    ioUtil=(float)blocked/(float)cycle;
+    throughPut=100.0/(float)cycle*(float)procNum;
     aveTurn=(float)totalTurn/(float)procNum;
     aveWait=(float)totalWait/(float)procNum;
     
     printf("\nSummary Data: \n");
-    printf("\tFinishing Time: %d\n",finish);
+    printf("\tFinishing Time: %d\n",cycle);
     printf("\tCPU utilization: %f\n",cpuUtil);
     printf("\tI/O utilization: %f\n",ioUtil);
     printf("\tThroughPut: %f processes per hundred cycles\n",throughPut);
