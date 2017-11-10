@@ -177,9 +177,7 @@ int main(int argc, const char * argv[]) {
         //if all tasks have terminated, break out of the infinite loop
         if(checkEnd()==true) break;
         //clear and store how many resources are released in the round, as they can only be added at the end of the round
-        FOR(i,0,typeNum){
-            release[i]=0;
-        }
+        memset(release,0,typeNum*sizeof(int));
         
         //CHECKING BLOCKING PROCESS FIRST
         int blockingNum=0;
