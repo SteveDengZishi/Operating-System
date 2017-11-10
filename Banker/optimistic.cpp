@@ -1,8 +1,6 @@
 //  Created by Steve DengZishi on 11/4/17.
 //  Copyright © 2017 Steve DengZishi. All rights reserved.
 //
-// solve blocking status
-// store resources when abort
 
 #include <iostream>
 #include <cstdio>
@@ -127,11 +125,12 @@ int main(int argc, const char * argv[]) {
     status = new int[taskNum]{};
     recordTable = new result[taskNum]{};
     waiting = new int[taskNum]{};
-    release = new int[taskNum]{};
+    release = new int[typeNum]{};
     compute = new int[taskNum]{};
     claims = new int*[taskNum];
     
     memset(compute,-1,taskNum*sizeof(int));
+    memset(release,0,typeNum*sizeof(int));
     
     for(int i=0;i<taskNum;i++){
         claims[i]=new int[typeNum]{};
@@ -162,9 +161,7 @@ int main(int argc, const char * argv[]) {
         //if all tasks have terminated, break out of the infinite loop
         if(checkEnd()==true) break;
         //clear and store how many resources are released in the round, as they can only be added at the end of the round
-        FOR(i,0,typeNum){
-            release[i]=0;
-        }
+        memset(release,0,typeNum*sizeof(int));
         
         //CHECKING BLOCKING PROCESS FIRST
         int blockingNum=0;
