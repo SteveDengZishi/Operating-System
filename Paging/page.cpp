@@ -80,7 +80,7 @@ struct frame{
 double randDouble(){
     int randint;
     inFile>>randint;
-    double result = (double) randint / (double)RAND_MAX+1;
+    double result = (double) randint / 2147483648.0;
     return result;
 }
 
@@ -219,7 +219,7 @@ int main(int argc, const char * argv[]) {
     //open input file
     inFile.open("random-numbers.txt",ios::in);
     
-    DEHERE;//
+    //    DEHERE;//
     
     //setup input
     frameNum = M/P;
@@ -250,7 +250,7 @@ int main(int argc, const char * argv[]) {
         procs.emplace_back(0.5,0.125,0.125,4);
     }
     
-    DEHERE;//
+    //    DEHERE;//
     
     //start of the cycles
     while(true){
@@ -262,7 +262,7 @@ int main(int argc, const char * argv[]) {
         }
         if(allDone) break;
         
-        DEHERE;//
+        //        DEHERE;//
         
         //start of execution
         FOR(i,0,procNum){
@@ -275,22 +275,23 @@ int main(int argc, const char * argv[]) {
                     int curPage=procs[i].cur / P;
                     bool pageFault=checkPage(curPage,(int)i);
                     
-                    DEHERE;//
-                    DE(pageFault);
+                    //                    DEHERE;//
+                    //                    DE(pageFault);
+                    
                     //if page fault occurs
                     if(pageFault){
                         
-                        DEIF;//
+                        //                        DEIF;//
                         
                         procs[i].faultCount++;
                         int freeFrame=checkFrame();
                         
-                        DE(freeFrame);//
+                        //                        DE(freeFrame);//
                         
                         //check whether need eviction
                         if(freeFrame!=-1){
                             
-                            DEIFIF;//
+                            //                            DEIFIF;//
                             
                             //load page into frame table
                             frameTable[freeFrame].process_id = (int)i;
@@ -302,7 +303,7 @@ int main(int argc, const char * argv[]) {
                         }
                         else{
                             
-                            DEIFELSE;//
+                            //                            DEIFELSE;//
                             
                             //replace page
                             int lastProc = frameTable[lastFrame].process_id;
@@ -343,13 +344,13 @@ int main(int argc, const char * argv[]) {
     
     FOR(i,0,procNum){
         if(procs[i].evictCount==0){
-            cout<<"Process "<<i<<" had "<<procs[i].faultCount<<" faults."<<endl;
+            cout<<"Process "<<i+1<<" had "<<procs[i].faultCount<<" faults."<<endl;
             cout<<"\tWith no eviction, the average residence time is undefined."<<endl;
             totalFault+=procs[i].faultCount;
         }
         else{
             averRes=(double)procs[i].recidencyTime/(double)procs[i].evictCount;
-            cout<<"Process "<<i<<" had "<<procs[i].faultCount<<" faults. and "<<averRes<<" average residency"<<endl;
+            cout<<"Process "<<i+1<<" had "<<procs[i].faultCount<<" faults. and "<<averRes<<" average residency"<<endl;
             totalFault+=procs[i].faultCount;
             totalRes+=procs[i].recidencyTime;
             totalEvict+=procs[i].evictCount;
